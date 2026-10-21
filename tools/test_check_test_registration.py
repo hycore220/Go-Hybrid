@@ -306,6 +306,13 @@ class RegistrationTests(unittest.TestCase):
                                 ["tests/test_live.py"])
         self.assertEqual(guard.unregistered(root, text), [])
 
+    def test_arithmetic_left_shift_is_not_a_heredoc(self):
+        for command in ('value=$((1 << 2))', '(( value = 1 << (2 + 1) ))'):
+            with self.subTest(command=command):
+                root, text = self.build(command + '\npython3 tests/test_live.py\n',
+                                        ['tests/test_live.py'])
+                self.assertEqual(guard.unregistered(root, text), [])
+
     def test_heredoc_terminator_preserves_significant_leading_spaces(self):
         workflow = ("cat <<EOF\n  EOF\npython3 tests/test_disabled.py\nEOF\n"
                     "python3 tests/test_live.py\n")

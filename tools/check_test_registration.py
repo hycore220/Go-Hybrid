@@ -75,6 +75,19 @@ def heredoc_delimiters(line):
             continue
         if char == "#":
             break
+        arithmetic = (3 if line.startswith("$((", index) else
+                      2 if line.startswith("((", index) else 0)
+        if arithmetic:
+            # << in shell arithmetic is a shift, not an input redirect.
+            index += arithmetic
+            depth = 2
+            while index < len(line) and depth:
+                if line[index] == "(":
+                    depth += 1
+                elif line[index] == ")":
+                    depth -= 1
+                index += 1
+            continue
         if line.startswith("<<<", index):
             index += 3
             continue
