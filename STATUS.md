@@ -1,6 +1,6 @@
 # STATUS (for the human — 15 lines max)
 
-- Contributor release-target fix: all 4 offline packaging regressions pass (baseline 3 fail / 1 control pass); actual archive contents, checksums and smoke path exercised with fixture toolchains. Rust/Go CI and any bounty decision pending.
+- Contributor release-target fix: all 4 offline packaging regressions pass (baseline 3 fail / 1 control pass); actual archive contents, checksums and smoke path exercised with fixture toolchains. Exact final search found prior open PR #124: duplicate excluded, own validation PR closed, no upstream submission or reward.
 
 - Contributor #656 follow-up: apply the existing receiver guard to task callees and bound method values; 19 focused regressions cover residual defects and valid controls. Full workspace, corpus, differential, and CI are delivery gates.
 - Phase: **MVP DONE + v0.1.0 released + community OPEN** — session-23: triage bot shipped (PR #941) + Pareto landed 12 PRs verified (#892 #741 #869 #901 #915 #899 #913 #917 #671 #938 #885 #870) + #804/#793 evidence-closed (Go 1.26.9 accepts directional makes) — main tip b84fff6, battery cargo green, corpus 113/113, differential FULL 37+76, census 7/7
