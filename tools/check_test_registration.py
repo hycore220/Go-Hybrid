@@ -20,8 +20,8 @@ reference it, and fails closed on any file no reference reaches:
 
 Only explicit single-line Python invocations count. Comments, echoed text,
 step names, interpreter flags, chained later commands, and paths passed as
-arguments to other scripts register nothing. This is not a general
-shell/YAML interpreter.
+arguments to other scripts and here-document contents register nothing.
+This is not a general shell/YAML interpreter.
 
 Usage: python3 tools/check_test_registration.py [--workflow PATH] [--root DIR]
 Exit:  0 = every test file is registered; 1 = unregistered file(s); 2 = guard misuse.
@@ -50,10 +50,84 @@ def shell_words(line):
     return list(lexer)
 
 
+def heredoc_delimiters(line):
+    """Find unquoted << / <<- redirects, preserving delimiter quote removal.
+
+    Shell here-documents are data even when a body line looks like Python.
+    A quoted or escaped << and Bash's <<< here-string do not start a body.
+    """
+    delimiters = []
+    index = 0
+    quote = None
+    while index < len(line):
+        char = line[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            index += 1
+            continue
+        if char in "'\"":
+            quote = char
+            index += 1
+            continue
+        if char == "#":
+            break
+        if line.startswith("<<<", index):
+            index += 3
+            continue
+        if not line.startswith("<<", index):
+            index += 1
+            continue
+        index += 2
+        strip_tabs = line[index:index + 1] == "-"
+        if strip_tabs:
+            index += 1
+        while index < len(line) and line[index].isspace():
+            index += 1
+        start = index
+        word_quote = None
+        while index < len(line):
+            char = line[index]
+            if char == "\\" and word_quote != "'":
+                index += 2
+                continue
+            if word_quote:
+                if char == word_quote:
+                    word_quote = None
+            elif char in "'\"":
+                word_quote = char
+            elif char.isspace() or char in ";&|<>()":
+                break
+            index += 1
+        try:
+            words = shlex.split(line[start:index], comments=True)
+        except ValueError:
+            words = []
+        if len(words) == 1:
+            delimiters.append((words[0], strip_tabs))
+    return delimiters
+
+
 def python_commands(workflow_text):
     """Yield arguments of explicit, single-line Python invocations."""
-    for line in workflow_text.splitlines():
-        line = line.strip()
+    pending = []
+    indentation = ""
+    for raw_line in workflow_text.splitlines():
+        if pending:
+            # Remove only the opening command's YAML/script indentation.
+            # Extra spaces are significant for <<; <<- strips tabs only.
+            body_line = raw_line.removeprefix(indentation)
+            delimiter, strip_tabs = pending[0]
+            if strip_tabs:
+                body_line = body_line.lstrip("\t")
+            if body_line == delimiter:
+                pending.pop(0)
+            continue
+        indentation = raw_line[:len(raw_line) - len(raw_line.lstrip())]
+        line = raw_line.strip()
         inline_run = re.match(r"(?:-\s+)?run:\s*(.*)", line)
         if inline_run:
             line = inline_run.group(1)
@@ -61,9 +135,11 @@ def python_commands(workflow_text):
             tokens = shell_words(line)
             # A quoted YAML run scalar wraps the whole shell command.
             if inline_run and len(tokens) == 1:
+                line = tokens[0]
                 tokens = shell_words(tokens[0])
         except ValueError:
             continue
+        pending = heredoc_delimiters(line)
         if tokens and PYTHON_RE.fullmatch(tokens[0]):
             # Only the first simple command is covered. A following echo's
             # -p flag must never become another unittest discovery pattern.

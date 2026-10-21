@@ -267,6 +267,53 @@ class RegistrationTests(unittest.TestCase):
                          ["tools/test_disabled.py", "tests/test_disabled.py"])
 
 
+    def test_heredoc_data_does_not_register_either_test_style(self):
+        workflow = ("cat <<'TEXT'\n"
+                    "python3 -m unittest discover -s tools -p test_disabled.py\n"
+                    "python3 tests/test_disabled.py\nTEXT\n")
+        root, text = self.build(workflow, ["tools/test_disabled.py", "tests/test_disabled.py"])
+        self.assertEqual([rel for rel, _ in guard.unregistered(root, text)],
+                         ["tools/test_disabled.py", "tests/test_disabled.py"])
+
+    def test_real_command_after_heredoc_still_registers(self):
+        workflow = ("          cat <<'END DATA'\n"
+                    "          python3 -m unittest discover -s tools -p test_disabled.py\n"
+                    "          END DATA\n"
+                    "          python3 -m unittest discover -s tools -p test_live.py\n")
+        root, text = self.build(workflow, ["tools/test_disabled.py", "tools/test_live.py"])
+        self.assertEqual([rel for rel, _ in guard.unregistered(root, text)],
+                         ["tools/test_disabled.py"])
+
+    def test_multiple_heredocs_are_consumed_in_order(self):
+        workflow = ("cat <<FIRST <<-'SECOND'\n"
+                    "python3 tests/test_first.py\nFIRST\n"
+                    "\tpython3 tests/test_second.py\n\tSECOND\n"
+                    "python3 tests/test_live.py\n")
+        root, text = self.build(workflow, ["tests/test_first.py", "tests/test_second.py",
+                                           "tests/test_live.py"])
+        self.assertEqual([rel for rel, _ in guard.unregistered(root, text)],
+                         ["tests/test_first.py", "tests/test_second.py"])
+
+    def test_quoted_redirection_text_does_not_hide_the_next_command(self):
+        for command in ('echo "<<EOF"', "echo '<<' 'EOF'", r"echo \<\<EOF"):
+            with self.subTest(command=command):
+                workflow = command + "\npython3 tests/test_live.py\n"
+                root, text = self.build(workflow, ["tests/test_live.py"])
+                self.assertEqual(guard.unregistered(root, text), [])
+
+    def test_here_string_does_not_hide_the_next_command(self):
+        root, text = self.build('cat <<< "example"\npython3 tests/test_live.py\n',
+                                ["tests/test_live.py"])
+        self.assertEqual(guard.unregistered(root, text), [])
+
+    def test_heredoc_terminator_preserves_significant_leading_spaces(self):
+        workflow = ("cat <<EOF\n  EOF\npython3 tests/test_disabled.py\nEOF\n"
+                    "python3 tests/test_live.py\n")
+        root, text = self.build(workflow, ["tests/test_disabled.py", "tests/test_live.py"])
+        self.assertEqual([rel for rel, _ in guard.unregistered(root, text)],
+                         ["tests/test_disabled.py"])
+
+
 class GuardMisuseTests(unittest.TestCase):
     def run_main(self, workflow, suites=()):
         """Run the real main() against a throwaway workflow/root pair."""
@@ -312,6 +359,13 @@ class GuardMisuseTests(unittest.TestCase):
         self.assertEqual(
             self.run_main("python3 -m unittest discover -s tools/fuzz -p 'test_*.py'\n",
                           ["tools/fuzz/test_control.py", "tools/test_orphan.py"]), 1)
+
+    def test_heredoc_only_references_exit_one(self):
+        self.assertEqual(self.run_main(
+            "cat <<'TEXT'\n"
+            "python3 -m unittest discover -s tools -p test_x.py\n"
+            "python3 tests/test_x.py\nTEXT\n",
+            ["tools/test_x.py", "tests/test_x.py"]), 1)
 
 
 if __name__ == "__main__":
