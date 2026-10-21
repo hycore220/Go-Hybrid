@@ -65,23 +65,25 @@ command -v go >/dev/null || { echo "go not on PATH" >&2; exit 1; }
 # --- 1. build the staticlib CRATE-LOCALLY (env.sh's shared CARGO_TARGET_DIR
 #        redirects manual builds — the stale-archive trap, worklog session 8).
 #        The lib must land at runtime/rust/hyrt/target/release/.
+#        Explicit --target-dir overrides both the inherited environment and
+#        Cargo config, so assembly cannot pick up an older crate-local build.
 #        Cross mode: --target $RUST_TARGET puts it under target/<triple>/ —
 #        step 3 re-lays it into the packaged tree either way. ---
 echo "==> building hyrt staticlib (crate-local)"
 ( cd "$REPO_ROOT/runtime/rust/hyrt" && \
   if [ -n "$RUST_TARGET" ]; then \
-      env CARGO_BUILD_JOBS=2 $CROSS_ENV cargo build --release --target "$RUST_TARGET" --quiet; \
+      env CARGO_BUILD_JOBS=2 $CROSS_ENV cargo build --release --target-dir "$REPO_ROOT/runtime/rust/hyrt/target" --target "$RUST_TARGET" --quiet; \
   else \
-      CARGO_BUILD_JOBS=2 cargo build --release --quiet; fi )
+      CARGO_BUILD_JOBS=2 cargo build --release --target-dir "$REPO_ROOT/runtime/rust/hyrt/target" --quiet; fi )
 
 # --- 2. build the CLI (same target as the staticlib — the hyb BINARY must
 #        run on the target arch) ---
 echo "==> building hyb (release)"
 ( cd "$REPO_ROOT/compiler" && \
   if [ -n "$RUST_TARGET" ]; then \
-      env CARGO_BUILD_JOBS=2 $CROSS_ENV cargo build --release -p hyb --target "$RUST_TARGET" --quiet; \
+      env CARGO_BUILD_JOBS=2 $CROSS_ENV cargo build --release -p hyb --target-dir "$REPO_ROOT/compiler/target" --target "$RUST_TARGET" --quiet; \
   else \
-      cargo build --release -p hyb --quiet; fi )
+      cargo build --release -p hyb --target-dir "$REPO_ROOT/compiler/target" --quiet; fi )
 HYB_BIN="$REPO_ROOT/compiler/target/release/hyb"
 if [ -n "$RUST_TARGET" ]; then
     HYB_BIN="$REPO_ROOT/compiler/target/$RUST_TARGET/release/hyb"
