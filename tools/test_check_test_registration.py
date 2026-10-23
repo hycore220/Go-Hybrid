@@ -375,5 +375,8 @@ class GuardMisuseTests(unittest.TestCase):
             ["tools/test_x.py", "tests/test_x.py"]), 1)
 
 
+    def test_start_directory_escaping_repo_root_is_rejected(self):
+        self.assertEqual(self.run_main("python3 -m unittest discover -s .. -p 'test_*.py'\n", ["tools/test_x.py"]), 1)
+
 if __name__ == "__main__":
     unittest.main()
